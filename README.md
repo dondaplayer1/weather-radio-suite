@@ -1,3 +1,4 @@
+
 # WeatherRadioSuite
 A faithful recreation of NOAA's National Weather Service - NOAA Weather Radio "Broadcast Message Handler" system, in Python.
 ## What can it do?
@@ -24,12 +25,12 @@ Once you've cloned the repo, extract the contents of WeatherRadioSuite-LIB.zip t
 
 Ideally, your topography should look something like this:
 
-WeatheRadioSuite
-|> binary/
-|> data-common/
-|> data-paul/
-|> include/
-|> the rest of the files (.py, .bat, etc)
+WeatherRadioSuite:
+ - binary/
+ - data-common/
+ - data-paul/
+ - include/
+ - the rest of the files (.py, .bat, etc)
 
 You can now continue with setup.
 ## Observations
