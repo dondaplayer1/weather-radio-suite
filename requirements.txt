@@ -2,3 +2,4 @@ tzlocal
 pytz
 requests
 datetime
+textual

@@ -29,7 +29,7 @@ class ColorFormatter(logging.Formatter):
     red = "\x1b[91m"
     reset = "\x1b[0m"
 
-    format_str = "%(asctime)s | %(levelname)-5.5s | %(message)s"
+    format_str = "%(asctime)s | %(levelname)-8s | %(message)s"
 
     FORMATS = {
         logging.DEBUG: grey + format_str + reset,
@@ -44,6 +44,24 @@ class ColorFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
+def setup_logging(verbose, config=None):
+    try:
+        if config is not None:
+            loglevel = config.upper()
+        else:
+            loglevel = 'DEBUG' if verbose else 'INFO'
+        log = logging.getLogger("BMH")
+        log.setLevel(loglevel)
+
+        ch = logging.StreamHandler()
+        ch.setLevel(loglevel)
+        ch.setFormatter(ColorFormatter())
+        log.addHandler(ch)
+        return log
+    except Exception:
+        print(f"Error setting up logging: {traceback.format_exc()}")
+        sys.exit(1)
+
 try:
     parser = argparse.ArgumentParser(description='BMH Emulation')
     parser.add_argument('--config', default='config.json', help='Path to the config file')
@@ -54,15 +72,6 @@ try:
 
     config = json.load(open('config.json', encoding='utf-8'))
 
-    loglevel = config.get('logLevel', 'INFO').upper() if not args.verbose else 'DEBUG'
-    log = logging.getLogger("BMH")
-    log.setLevel(loglevel)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevel)
-    ch.setFormatter(ColorFormatter())
-    log.addHandler(ch)
-
     # Various products
     from forecast import getForecast
     from alert_summary import getAlertSummary
@@ -71,17 +80,30 @@ try:
     from current_time import getCurrentTime
     from area_observations import getObservations
 except FileNotFoundError:
-    print("Error: config.json file not found. Please ensure it exists in the current directory.")
-    sys.exit(1)
-except json.JSONDecodeError as e:
+    log = setup_logging(args.verbose, None)
     if args.generate_config:
         from utils import generate_default_config
-        generate_default_config()
+        generate_default_config(log)
+        sys.exit(0)
+    elif args.interactively_configure:
+        from utils import interactive_config_setup
+        interactive_config_setup(log)
         sys.exit(0)
     else:
-        print(f"Error parsing config.json: {e.msg} at line {e.lineno} column {e.colno}\nMaybe run --generate-config to create a new, safe default?")
+        log.critical("Error: config.json file not found. Please ensure it exists in the current directory.")
+        sys.exit(1)
+except json.JSONDecodeError as e:
+    log = setup_logging(args.verbose, None)
+    if args.generate_config:
+        from utils import generate_default_config
+        generate_default_config(log)
+        sys.exit(0)
+    else:
+        log.critical(f"Error parsing config.json: {e.msg} at line {e.lineno} column {e.colno}\nMaybe run --generate-config to create a new, safe default?")
+        sys.exit(1)
 except Exception as e:
-    print(f"Error loading config.json: {traceback.format_exc()}")
+    log = setup_logging(args.verbose, None)
+    log.critical(f"Error loading config.json: {traceback.format_exc()}")
     sys.exit(1)
 
 path_separator = '\\' if os.name == 'nt' else '/'
@@ -112,7 +134,7 @@ def run_time_updates(minutes, AUDIO_SEQUENCE):
         combine_audio('FINAL_CYCLE.wav', AUDIO_SEQUENCE)
         time.sleep(60)
 
-def main():
+def main(log):
     try:
         log.info('[BMH] Setting up BMH Emulation environment...')
         os.makedirs(f'..{path_separator}bmh_wav', exist_ok=True)
@@ -183,12 +205,15 @@ def main():
 
 if __name__ == '__main__':
     if args.generate_config:
+        log = setup_logging(args.verbose, config["logLevel"] if "logLevel" in config else None)
         from utils import generate_default_config
-        generate_default_config()
+        generate_default_config(log)
         sys.exit(0)
     if args.interactively_configure:
+        log = setup_logging(args.verbose, config["logLevel"] if "logLevel" in config else None)
         from utils import interactive_config_setup
-        interactive_config_setup()
+        interactive_config_setup(log)
         sys.exit(0)
     else:
-        main()
+        log = setup_logging(args.verbose, config["logLevel"] if "logLevel" in config else None)
+        main(log)
