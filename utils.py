@@ -5,15 +5,16 @@ import traceback
 import subprocess
 import shutil
 import logging
-import time
-import tzlocal
-import pytz
+import webbrowser
 from dataclasses import dataclass
 from typing import Generator, Optional
+import tzlocal
+import pytz
 
 global_prompt = ""
 clicked_yes = False
 clicked_no = False
+last_link = ""
 
 def produce_wav_file(text, output_module_name):
     try:
@@ -133,9 +134,9 @@ def interactive_config_setup(log):
     try:
         from textual import events
         from textual.app import App, ComposeResult
-        from textual.containers import Vertical
         from textual.message import Message
-        from textual.widgets import Footer, Header, Static, TextArea
+        from textual.containers import Vertical, Horizontal, Container
+        from textual.widgets import Static, TextArea
         from textual.widgets import Button as ButtonWidget
     except ImportError as exc:
         log.error("[UTILS] Textual is required for the interactive setup. Install it with 'pip install textual'. (%s)", exc)
@@ -149,46 +150,73 @@ def interactive_config_setup(log):
 
     class ConfigWizard(App):
         CSS = """
-        * {
+        Screen {
             align: center middle;
         }
 
-        TextArea {
+        #container {
+            width: 80%;
+            max-width: 80%;
+            height: 50%;
+            max-height: 50%;
+            padding: 2 4;
             border: round $accent;
-            height: 30%;
-        }
-
-        Button {
-            width: 10;
-            margin: 1 2;
+            background: $surface;
             align: center middle;
         }
 
         #form {
-            width: 100vw;
-            max-width: 100vw;
-            padding: 1 2;
+            width: 100%;
             align: center middle;
         }
 
-        #yes_button {
-            background: green;
-            width: 10;
-            height: 3;
+        #prompt,
+        #hint,
+        #hint_buttons {
+            text-align: center;
         }
 
-        #yes_button:hover {
+        #response {
+            align: center middle;
+            border: round skyblue;
+        }
+
+        #confirmation_buttons {
+            width: 100%;
+            align: center middle;
+        }
+
+        #confirmation_buttons > Button {
+            text-align: center;
+            width: 15;
+            height: 3;
+            margin: 0 1;
+        }
+
+        #yes_button,#ok_button {
+            background: green;
+        }
+
+        #yes_button:hover,#ok_button:hover {
             background: darkgreen;
         }
 
         #no_button {
             background: red;
-            width: 10;
-            height: 3;
         }
 
         #no_button:hover {
             background: darkred;
+        }
+
+        #open_link_button {
+            background: $accent;
+            color: $surface;
+            width: 22 !important;
+        }
+
+        #open_link_button:hover {
+            background: $accent-darken-1;
         }
 
         .hidden {
@@ -258,10 +286,10 @@ def interactive_config_setup(log):
             self._awaiting_confirmation: bool = False
 
         def compose(self) -> ComposeResult:
-            yield Header()
-            with Vertical(id="form"):
-                yield Static("", id="prompt")
-                if "using the default" not in global_prompt:
+            with Container(id="container"):
+                with Vertical(id="form"):
+                    yield Static("\n\n\n\n", id="spacer")
+                    yield Static("", id="prompt")
                     yield self.ResponseTextArea(
                         placeholder="",
                         id="response",
@@ -269,10 +297,13 @@ def interactive_config_setup(log):
                         show_line_numbers=False,
                         highlight_cursor_line=False,
                     )
-                yield ButtonWidget("Yes", id="yes_button", classes="hidden")
-                yield ButtonWidget("No", id="no_button", classes="hidden")
-                yield Static("Press Enter to accept the default value that comes in the example config. Press Ctrl+C or Escape to cancel without saving your changes.", id="hint")
-            yield Footer()
+                    yield Static("\n\nPress Enter to accept the default value that comes in the example config. Press Ctrl+C or Escape to cancel without saving your changes.", id="hint")
+                    with Horizontal(id="confirmation_buttons"):
+                        yield ButtonWidget("Yes", id="yes_button", classes="hidden")
+                        yield ButtonWidget("No", id="no_button", classes="hidden")
+                        yield ButtonWidget("OK", id="ok_button")
+                        yield ButtonWidget("Open Link in Browser", id="open_link_button", classes="hidden")
+                    yield Static("\n\nPress Yes to accept the default value that comes in the example config. Press No to enter a custom value. Press Ctrl+C or Escape to cancel without saving your changes.", id="hint_buttons", classes="hidden")
 
         def on_mount(self) -> None:
             self._steps_iter = self._steps()
@@ -297,6 +328,8 @@ def interactive_config_setup(log):
         def _advance(self, user_input: str) -> None:
             prompt_widget = self.query_one("#prompt", Static)
             input_widget = self.query_one("#response", self.ResponseTextArea)
+            hint_buttons = self.query_one("#hint_buttons", Static)
+            hint = self.query_one("#hint", Static)
 
             try:
                 if self._current_step is None:
@@ -317,7 +350,17 @@ def interactive_config_setup(log):
             input_widget.placeholder = step.placeholder or step.default
             input_widget.text = ""
 
-            if "using the default" not in global_prompt:
+            if last_link and "https://" in last_link:
+                open_link_button = self.query_one("#open_link_button", ButtonWidget)
+                open_link_button.classes = ""
+                open_link_button.visible = True
+
+            else:
+                open_link_button = self.query_one("#open_link_button", ButtonWidget)
+                open_link_button.classes = "hidden"
+                open_link_button.visible = False
+
+            if "[bool]" not in global_prompt:
                 prompt_widget.update(global_prompt)
 
             else:
@@ -325,9 +368,16 @@ def interactive_config_setup(log):
                 input_widget.visible = False
                 yes_button = self.query_one("#yes_button", ButtonWidget)
                 no_button = self.query_one("#no_button", ButtonWidget)
+                ok_button = self.query_one("#ok_button", ButtonWidget)
                 yes_button.classes = ""
                 no_button.classes = ""
-                prompt_widget.update(f"[bold red]{global_prompt}[/bold red]\n\n{step.placeholder}")
+                ok_button.classes = "hidden"
+                ok_button.visible = False
+                hint_buttons.classes = ""
+                hint_buttons.visible = True
+                hint.classes = "hidden"
+                hint.visible = False
+                prompt_widget.update(f"[bold red]{global_prompt.replace('[bool]', '')}[/bold red]\n\n{step.placeholder}")
                 global clicked_yes
                 global clicked_no
                 clicked_yes = False
@@ -339,11 +389,23 @@ def interactive_config_setup(log):
             self.call_after_refresh(input_widget.focus)
 
         def on_button_pressed(self, event: ButtonWidget.Pressed) -> None:
+            button_id = event.button.id
+
+            if button_id == "ok_button" and not self._awaiting_confirmation:
+                event.stop()
+                self._submit_response()
+                return
+
+            if button_id == "open_link_button":
+                event.stop()
+                global last_link
+                webbrowser.open(last_link)
+                return
+
             if not self._awaiting_confirmation:
                 return
 
-            button_id = event.button.id
-            if button_id not in {"yes_button", "no_button"}:
+            if button_id not in {"yes_button", "no_button", "ok_button"}:
                 return
 
             event.stop()
@@ -351,13 +413,23 @@ def interactive_config_setup(log):
             input_widget = self.query_one("#response", self.ResponseTextArea)
             yes_button = self.query_one("#yes_button", ButtonWidget)
             no_button = self.query_one("#no_button", ButtonWidget)
+            ok_button = self.query_one("#ok_button", ButtonWidget)
+            hint_buttons = self.query_one("#hint_buttons", Static)
+            hint = self.query_one("#hint", Static)
+
             yes_button.classes = "hidden"
             no_button.classes = "hidden"
             input_widget.visible = True
             input_widget.classes = ""
             input_widget.text = ""
+            hint_buttons.classes = "hidden"
+            hint_buttons.visible = False
+            hint.classes = ""
+            hint.visible = True
+            ok_button.classes = ""
+            ok_button.visible = True
 
-            choice = "yes" if button_id == "yes_button" else "no"
+            choice = "yes" if button_id == "yes_button" or button_id == "ok_button" else "no"
 
             global clicked_yes
             global clicked_no
@@ -369,39 +441,42 @@ def interactive_config_setup(log):
             self.call_after_refresh(lambda selection=choice: self._advance(selection))
 
         def _steps(self) -> Generator[Step, str, None]:
-            tts_speed = (yield Step("Enter TTS Speed (default 110): ", "110", "This is how fast the TTS will speak.")).strip()
-            self.answers["ttsSpeed"] = tts_speed or "110"
+            global last_link
 
-            end_pause = (yield Step("Enter End Pause in milliseconds (default 1300): ", "1300", "This is the pause duration in milliseconds after the TTS ends each sentence.")).strip()
-            self.answers["endPause"] = end_pause or "1300"
+            tts_speed = (yield Step("Enter TTS Speed (default 110): \n\n", "110", "This is how fast Paul will speak.")).strip()
+            self.answers["ttsSpeed"] = tts_speed if isinstance(tts_speed, int) else "110"
 
-            log_level = (yield Step("Enter Log Level (DEBUG, INFO, WARNING, ERROR) (default INFO): ", "INFO", "How much logging do you want?")).strip()
+            end_pause = (yield Step("Enter End Pause in milliseconds (default 1300): \n\n", "1300", "This is the pause duration in milliseconds after Paul ends each sentence.")).strip()
+            self.answers["endPause"] = end_pause if isinstance(end_pause, int) else "1300"
+
+            log_level = (yield Step("Enter Log Level (DEBUG, INFO, WARNING, ERROR) (default INFO): \n\n", "INFO", "How much logging do you want?")).strip()
             self.answers["logLevel"] = (log_level or "INFO").upper()
 
-            http_timeout = (yield Step("Enter Global HTTP Timeout in seconds (default 15): ", "15", "How long should each page try and load before giving up?")).strip()
-            self.answers["globalHTTPTimeout"] = http_timeout or "15"
+            http_timeout = (yield Step("Enter Global HTTP Timeout in seconds (default 15): \n\n", "15", "How long should each page try and load before giving up?")).strip()
+            self.answers["globalHTTPTimeout"] = http_timeout if isinstance(http_timeout, int) else "15"
 
-            current_time_script = (yield Step("Enter Current Time Script (default 'The current time is.'): ", "The current time is.", "ex. Entering \"The current time is.\" would mean that sentence and then the time would be read out, you can add the station ID tagline here if you wish.")).strip()
+            current_time_script = (yield Step("Enter Current Time Script (default 'The current time is.'): \n\n", "The current time is.", "ex. Entering \"The current time is.\" would mean that sentence and then the time would be read out, you can add the station ID tagline here if you wish.")).strip()
             self.answers["currentTimeScript"] = current_time_script or "The current time is."
 
-            date_enable_input = (yield Step("Enable Date Announcement? (yes/no) (default no): ", "no", "Usually not recommended.")).strip().lower()
+            date_enable_input = (yield Step("[bool] Enable Date Announcement? (yes/no) (default no): \n\n", "no", "Usually not recommended.")).strip().lower()
             date_enable = date_enable_input in ("yes", "y")
             self.answers["dateEnable"] = date_enable
 
             if date_enable:
-                date_script = (yield Step("Enter Date Script (default 'Today's date is. '): ", "Today's date is. ", "ex. Entering \"Today's date is.\" would mean that sentence would be read, then the date would be read out.")).strip()
+                date_script = (yield Step("Enter Date Script (default 'Today's date is. '): \n\n", "Today's date is. ", "ex. Entering \"Today's date is.\" would mean that sentence would be read, then the date would be read out.")).strip()
                 self.answers["dateScript"] = date_script or "Today's date is. "
             else:
                 self.answers["dateScript"] = "Today's date is. "
 
-            main_obs_code = (yield Step("Enter Main Observation Station Code (default KAZO): ", "KAZO", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\", just remember to add a \"K\" before the code.")).strip()
+            last_link = "https://www.weather.gov/nwr/wfo_nwr"
+            main_obs_code = (yield Step("Enter Main Observation Station Code (default KAZO): \n\n", "KAZO", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\", just remember to add a \"K\" before the code.")).strip()
             self.answers["mainObsCode"] = main_obs_code or "KAZO"
             keep_going = True if main_obs_code == "KAZO" else False
             while self.answers["mainObsCode"] == "" or keep_going is True:
                 keep_going = True
-                confirm = (yield Step("You are using the default KAZO observation code. Are you sure? (yes/no) (default no): ", "yes", "KAZO is for Kalamazoo, MI. If you are not in that area, please enter your local observation station code.")).strip().lower()
+                confirm = (yield Step("[bool] You are using the default KAZO observation code. Are you sure? (yes/no) (default no): \n\n", "yes", "KAZO is for Kalamazoo, MI. If you are not in that area, please enter your local observation station code.")).strip().lower()
                 if confirm not in ("yes", "y"):
-                    main_obs_code = (yield Step("Enter Main Observation Station Code: ", "", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\", just remember to add a \"K\" before the code.")).strip()
+                    main_obs_code = (yield Step("Enter Main Observation Station Code: \n\n", "", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\", just remember to add a \"K\" before the code.")).strip()
                     self.answers["mainObsCode"] = main_obs_code
                     if self.answers["mainObsCode"] != "":
                         keep_going = False
@@ -410,28 +485,29 @@ def interactive_config_setup(log):
                 else:
                     keep_going = False
 
-            regional_codes_input = (yield Step("Enter Regional Observation Airport Codes separated by commas (leave blank for none): ", "", "ex. \"KBTL,KHAI,KLWA,KGRR...\" would mean 4 regional codes and observations from those airports would be reported.")).strip()
+            last_link = ""
+            regional_codes_input = (yield Step("Enter Regional Observation Airport Codes separated by commas (leave blank for none): \n\n", "", "ex. \"KBTL,KHAI,KLWA,KGRR...\" would mean 4 regional codes and observations from those airports would be reported.")).strip()
             if regional_codes_input:
                 regional_codes = [code.strip() for code in regional_codes_input.split(",") if code.strip()]
             else:
                 regional_codes = []
             self.answers["regionalObsCodes"] = regional_codes
             if regional_codes == []:
-                confirm_no_regional = (yield Step("You are using the default of having NO regional observation stations. Are you sure? (yes/no) (default no): ", "yes", "It's usually recommended to have at least a few regional observations for a broader view of the weather. If you don't know your regional observation locations, listen to your local weather radio broadcast for a few minutes and see if you can identify them!")).strip().lower()
+                confirm_no_regional = (yield Step("[bool] You are using the default of having NO regional observation stations. Are you sure? (yes/no) (default no): \n\n", "yes", "It's usually recommended to have at least a few regional observations for a broader view of the weather. If you don't know your regional observation locations, listen to your local weather radio broadcast for a few minutes and see if you can identify them!")).strip().lower()
                 if confirm_no_regional not in ("yes", "y"):
-                    regional_codes_input = (yield Step("Enter Regional Observation Airport Codes separated by commas (leave blank for none): ", "", "ex. \"KBTL,KHAI,KLWA,KGRR...\" would mean 4 regional codes and observations from those airports would be reported.")).strip()
+                    regional_codes_input = (yield Step("Enter Regional Observation Airport Codes separated by commas (leave blank for none): \n\n", "", "ex. \"KBTL,KHAI,KLWA,KGRR...\" would mean 4 regional codes and observations from those airports would be reported.")).strip()
                     if regional_codes_input:
                         regional_codes = [code.strip() for code in regional_codes_input.split(",") if code.strip()]
                     else:
                         regional_codes = []
                     self.answers["regionalObsCodes"] = regional_codes
 
-            openers_enabled = (yield Step("Enable Openers? (yes/no) (default no): ", "no", "Some stations, like Midland, TX, have little \"openers\" before the forecast. You can enable this here by saying yes.")).strip().lower() in ("yes", "y")
+            openers_enabled = (yield Step("[bool] Enable Openers? (yes/no) (default no): \n\n", "no", "Some stations, like Midland, TX, have little \"openers\" before the forecast. You can enable this here by saying yes.")).strip().lower() in ("yes", "y")
             openers: dict[int, str] = {}
             if openers_enabled:
                 idx = 1
                 while True:
-                    opener_value = (yield Step(f"Enter Opener Value for #{idx} (type 'done' to finish): ", "done", "ex. \"Got weather? The michigan mezonet does and here are your observations.\"")).strip()
+                    opener_value = (yield Step(f"Enter Opener Value for #{idx} (type 'done' to finish): \n\n", "done", "ex. \"Got weather? The michigan mezonet does and here are your observations.\"")).strip()
                     if not opener_value or opener_value.lower() == "done":
                         break
                     openers[idx] = opener_value
@@ -441,15 +517,15 @@ def interactive_config_setup(log):
 
             city_name_def: dict[str, str] = {}
             if regional_codes:
-                city_label = f"Enter the city name for airport code {self.answers['mainObsCode']}: "
+                city_label = f"Enter the city name for airport code {self.answers['mainObsCode']}: \n\n"
                 city_name = (yield Step(city_label, "Kalamazoo", "ex. Kalamazoo")).strip()
                 city_name_def[self.answers["mainObsCode"]] = city_name or "Kalamazoo"
                 keep_going = True if city_name == "Kalamazoo" else False
                 while keep_going is True:
                     keep_going = True
-                    confirm_city = (yield Step("You are using the default city name of Kalamazoo. Are you sure? (yes/no) (default no): ", "yes", "Kalamazoo is for KAZO and vice versa. If you are not in that local area, please enter your local city name.")).strip().lower()
+                    confirm_city = (yield Step("[bool] You are using the default city name of Kalamazoo. Are you sure? (yes/no) (default no): \n\n", "yes", "Kalamazoo is for KAZO and vice versa. If you are not in that local area, please enter your local city name.")).strip().lower()
                     if confirm_city not in ("yes", "y"):
-                        city_name = (yield Step(f"Enter the city name for airport code {self.answers['mainObsCode']}: ", "", "ex. Kalamazoo")).strip()
+                        city_name = (yield Step(f"Enter the city name for airport code {self.answers['mainObsCode']}: \n\n", "", "ex. Kalamazoo")).strip()
                         city_name_def[self.answers["mainObsCode"]] = city_name
                         if city_name_def[self.answers["mainObsCode"]] != "":
                             keep_going = False
@@ -458,14 +534,14 @@ def interactive_config_setup(log):
                     else:
                         keep_going = False
                 for city_code in regional_codes:
-                    city_label = f"Enter the city name for airport code {city_code}: "
+                    city_label = f"Enter the city name for airport code {city_code}: \n\n"
                     city_name = (yield Step(city_label, "", "ex. Kalamazoo")).strip()
                     keep_going = True if city_name == "" else False
                     while keep_going is True:
                         keep_going = True
-                        confirm_city = (yield Step(f"You are using the default, blank city name for airport code {city_code}. Are you sure? (yes/no) (default no): ", "yes", "You cannot leave any city names blank.")).strip().lower()
+                        confirm_city = (yield Step(f"[bool] You are using the default, blank city name for airport code {city_code}. Are you sure? (yes/no) (default no): \n\n", "yes", "You cannot leave any city names blank.")).strip().lower()
                         if confirm_city not in ("yes", "y"):
-                            city_name = (yield Step(f"Enter the city name for airport code {city_code}: ", "", "ex. Kalamazoo")).strip()
+                            city_name = (yield Step(f"Enter the city name for airport code {city_code}: \n\n", "", "ex. Kalamazoo")).strip()
                             if city_name != "":
                                 keep_going = False
                             else:
@@ -475,15 +551,15 @@ def interactive_config_setup(log):
                     city_name_def[city_code] = city_name
             else:
                 single_code = self.answers["mainObsCode"]
-                city_name = (yield Step(f"Enter the city name for airport code {single_code}: ", "Kalamazoo", "ex. Kalamazoo")).strip()
+                city_name = (yield Step(f"Enter the city name for airport code {single_code}: \n\n", "Kalamazoo", "ex. Kalamazoo")).strip()
                 city_name_def[single_code] = city_name or "Kalamazoo"
             self.answers["cityNameDef"] = city_name_def
             keep_going = True if city_name == "Kalamazoo" else False
             while keep_going is True:
                 keep_going = True
-                confirm_city = (yield Step("You are using the default city name of Kalamazoo. Are you sure? (yes/no) (default no): ", "yes", "Kalamazoo is for KAZO and vice versa. If you are not in that local area, please enter your local city name.")).strip().lower()
+                confirm_city = (yield Step("[bool] You are using the default city name of Kalamazoo. Are you sure? (yes/no) (default no): \n\n", "yes", "Kalamazoo is for KAZO and vice versa. If you are not in that local area, please enter your local city name.")).strip().lower()
                 if confirm_city not in ("yes", "y"):
-                    city_name = (yield Step(f"Enter the city name for airport code {single_code}: ", "", "ex. Kalamazoo")).strip()
+                    city_name = (yield Step(f"Enter the city name for airport code {single_code}: \n\n", "", "ex. Kalamazoo")).strip()
                     city_name_def[single_code] = city_name
                     self.answers["cityNameDef"] = city_name_def
                     if city_name_def[single_code] != "":
@@ -493,7 +569,7 @@ def interactive_config_setup(log):
                 else:
                     keep_going = False
 
-            dividers_enabled = (yield Step("Enable Observation dividers? (yes/no) (default no): ", "no", "These are custom strings used to divvy up the observations by region. This lets you enter custom text before each city's observations are read out.")).strip().lower() in ("yes", "y")
+            dividers_enabled = (yield Step("[bool] Enable Observation dividers? (yes/no) (default no): \n\n", "no", "These are custom strings used to divvy up the observations by region. This lets you enter custom text before each city's observations are read out.\n\n")).strip().lower() in ("yes", "y")
             dividers: dict[str, str] = {}
             if dividers_enabled and regional_codes:
                 for city_code in regional_codes:
@@ -503,17 +579,18 @@ def interactive_config_setup(log):
                         dividers[city_code] = divider_text
             self.answers["dividers"] = dividers
 
-            forecast_days = (yield Step("Enter Forecast Days (default 14): ", "14", "The number of days to include in the forecast. Typically, this is 14 days (2 weeks).")).strip()
+            forecast_days = (yield Step("Enter Forecast Days (default 14): \n\n", "14", "The number of days to include in the forecast. Typically, this is 14 days (2 weeks).\n\n")).strip()
             self.answers["forecastDays"] = forecast_days or "14"
 
-            forecast_zone = (yield Step("Enter Forecast Zone (default MIZ072): ", "MIZ072", "You can find this by visiting https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd and enabling the \"Public Weather Zone Forecasts\" layer. Click the link, wait for ArcGIS to load, then click the arrow next to \"Nws reference map\", then \"Weather Zone Forecasts\", then finally click the eye icon next to \"Public Weather Zone Forecasts\". Zoom in to your county and the zone will be a string like \"MI072\" on the map itself. Just add a letter Z (for Zone) between the state abbreviation and the zone ID.")).strip()
+            last_link = "https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd"
+            forecast_zone = (yield Step("Enter Forecast Zone (default MIZ072): \n\n", "MIZ072", "You can find this by visiting: https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd and enabling the \"Public Weather Zone Forecasts\" layer. Click the link, wait for ArcGIS to load, then click the arrow next to \"Nws reference map\", then \"Weather Zone Forecasts\", then finally click the eye icon next to \"Public Weather Zone Forecasts\". Zoom in to your county and the zone will be a string like \"MI072\" on the map itself. Just add a letter Z (for Zone) between the state abbreviation and the zone ID.")).strip()
             self.answers["forecastZone"] = forecast_zone or "MIZ072"
             keep_going = False if forecast_zone != "MIZ072" else True
             while keep_going is True:
                 keep_going = True
-                confirm_zone = (yield Step("You are using the default MIZ072 forecast zone. Are you sure? (yes/no) (default no): ", "yes", "MIZ072 is for Kalamazoo, MI. If you are not in that area, please enter your local forecast zone.")).strip().lower()
+                confirm_zone = (yield Step("[bool] You are using the default MIZ072 forecast zone. Are you sure? (yes/no) (default no): ", "yes", "MIZ072 is for Kalamazoo, MI. If you are not in that area, please enter your local forecast zone.")).strip().lower()
                 if confirm_zone not in ("yes", "y"):
-                    forecast_zone = (yield Step("Enter Forecast Zone: ", "", "You can find this by visiting https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd and enabling the \"Public Weather Zone Forecasts\" layer. Click the link, wait for ArcGIS to load, then click the arrow next to \"Nws reference map\", then \"Weather Zone Forecasts\", then finally click the eye icon next to \"Public Weather Zone Forecasts\". Zoom in to your county and the zone will be a string like \"MI072\" on the map itself. Just add a letter Z (for Zone) between the state abbreviation and the zone ID.")).strip()
+                    forecast_zone = (yield Step("Enter Forecast Zone: ", "", "You can find this by visiting: https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd and enabling the \"Public Weather Zone Forecasts\" layer. Click the link, wait for ArcGIS to load, then click the arrow next to \"Nws reference map\", then \"Weather Zone Forecasts\", then finally click the eye icon next to \"Public Weather Zone Forecasts\". Zoom in to your county and the zone will be a string like \"MI072\" on the map itself. Just add a letter Z (for Zone) between the state abbreviation and the zone ID.")).strip()
                     self.answers["forecastZone"] = forecast_zone
                     if self.answers["forecastZone"] != "":
                         keep_going = False
@@ -522,21 +599,23 @@ def interactive_config_setup(log):
                 else:
                     keep_going = False
 
+            last_link = ""
             forecast_pre = (yield Step("Enter Forecast Pre-Script (default \"Here is your official national weather service forecast for the Kalamazoo listening area.\"): ", "Here is your official national weather service forecast for the Kalamazoo listening area.", "ex. \"This is the pre-script.\" would be said before the forecast is announced.")).strip()
             self.answers["forecastPre"] = forecast_pre
 
             forecast_post = (yield Step("Enter Forecast Post-Script (default \"For additional weather and climate information, please visit weather, dot g o v, forward slash, g, r, r.\"): ", "For additional weather and climate information, please visit weather, dot g o v, forward slash, g, r, r.", "ex. \"This is the post-script.\" would be said after the forecast is announced.")).strip()
             self.answers["forecastPost"] = forecast_post
 
-            tropical_input = (yield Step("Enable Tropical Forecast? (yes/no) (default no): ", "no", "Enable or disable tropical forecast. Useful if you live near coastal waters.")).strip().lower()
+            tropical_input = (yield Step("[bool] Enable Tropical Forecast? (yes/no) (default no): ", "no", "Enable or disable tropical forecast. Useful if you live near coastal waters.")).strip().lower()
             self.answers["enableTropicalForecast"] = tropical_input in ("yes", "y")
 
+            last_link = "https://www.weather.gov/nwr/wfo_nwr"
             hwo_office = (yield Step("Enter HWO Office Code (default GRR): ", "GRR", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\".")).strip()
             self.answers["hwoOffice"] = hwo_office or "GRR"
             keep_going = False if hwo_office != "GRR" else True
             while keep_going is True:
                 keep_going = True
-                confirm_hwo = (yield Step("You are using the default GRR HWO office code. Are you sure? (yes/no) (default no): ", "yes", "GRR is for Grand Rapids, MI. If you are not served by that HWO, please enter your local HWO office code.")).strip().lower()
+                confirm_hwo = (yield Step("[bool] You are using the default GRR HWO office code. Are you sure? (yes/no) (default no): ", "yes", "GRR is for Grand Rapids, MI. If you are not served by that HWO, please enter your local HWO office code.")).strip().lower()
                 if confirm_hwo not in ("yes", "y"):
                     hwo_office = (yield Step("Enter HWO Office Code: ", "", "You can find this at https://www.weather.gov/nwr/wfo_nwr under \"Call Sign\".")).strip()
                     self.answers["hwoOffice"] = hwo_office
@@ -552,7 +631,7 @@ def interactive_config_setup(log):
             keep_going = False if alert_station_id != "WNG773" else True
             while keep_going is True:
                 keep_going = True
-                confirm_alert_station = (yield Step("You are using the default WNG773 station ID. Are you sure? (yes/no) (default no): ", "yes", "WNG773 is for Kalamazoo, MI. If you are not in that area, please enter your local station ID.")).strip().lower()
+                confirm_alert_station = (yield Step("[bool] You are using the default WNG773 station ID. Are you sure? (yes/no) (default no): ", "yes", "WNG773 is for Kalamazoo, MI. If you are not in that area, please enter your local station ID.")).strip().lower()
                 if confirm_alert_station not in ("yes", "y"):
                     alert_station_id = (yield Step("Enter NWS Station ID: ", "", "You can find this at https://www.weather.gov/nwr/wfo_nwr under your local WFO, under \"Station ID\".")).strip()
                     self.answers["alertStationID"] = alert_station_id
@@ -563,6 +642,7 @@ def interactive_config_setup(log):
                 else:
                     keep_going = False
 
+            last_link = "https://www.weather.gov/nwr/counties"
             alert_zones_input = (yield Step("Enter Alert Zones separated by commas (default MIC077): ", "MIC077", "You can find this at https://www.weather.gov/nwr/counties under your state and county, replace the first 2 letters with your state abbreviation.")).strip()
             if alert_zones_input:
                 alert_zones = [zone.strip() for zone in alert_zones_input.split(",") if zone.strip()]
@@ -573,7 +653,7 @@ def interactive_config_setup(log):
             while keep_going is True:
                 keep_going = True
                 if alert_zones == ["MIC077"]:
-                    confirm_alert_zones = (yield Step("You are using the default MIC077 alert zone. Are you sure? (yes/no) (default no): ", "yes", "MIC077 is for Kalamazoo County, MI. If you are not in that area, please enter your local alert zones.")).strip().lower()
+                    confirm_alert_zones = (yield Step("[bool] You are using the default MIC077 alert zone. Are you sure? (yes/no) (default no): ", "yes", "MIC077 is for Kalamazoo County, MI. If you are not in that area, please enter your local alert zones.")).strip().lower()
                     if confirm_alert_zones not in ("yes", "y"):
                         alert_zones_input = (yield Step("Enter Alert Zones separated by commas: ", "", "You can find this at https://www.weather.gov/nwr/counties under your state and county, replace the first 2 letters with your state abbreviation.")).strip()
                         if alert_zones_input:

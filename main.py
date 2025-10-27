@@ -90,7 +90,7 @@ except FileNotFoundError:
         interactive_config_setup(log)
         sys.exit(0)
     else:
-        log.critical("Error: config.json file not found. Please ensure it exists in the current directory.")
+        log.critical("Error: config.json file not found. Please ensure it exists in the current directory. Try --generate-config to create a new, safe default, or --interactively-configure to set up interactively.")
         sys.exit(1)
 except json.JSONDecodeError as e:
     log = setup_logging(args.verbose, None)
@@ -163,6 +163,7 @@ def main(log):
                         f'bmh_wav{path_separator}Forecast.wav',
                         f'bmh_wav{path_separator}Observations.wav',
                         f'bmh_wav{path_separator}HWO.wav',
+                        f'bmh_wav{path_separator}TWO.wav',
                         f'bmh_wav{path_separator}CurrentTime.wav',
                     )
 
@@ -209,7 +210,7 @@ if __name__ == '__main__':
         from utils import generate_default_config
         generate_default_config(log)
         sys.exit(0)
-    if args.interactively_configure:
+    elif args.interactively_configure:
         log = setup_logging(args.verbose, config["logLevel"] if "logLevel" in config else None)
         from utils import interactive_config_setup
         interactive_config_setup(log)
