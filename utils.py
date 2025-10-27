@@ -444,16 +444,19 @@ def interactive_config_setup(log):
             global last_link
 
             tts_speed = (yield Step("Enter TTS Speed (default 110): \n\n", "110", "This is how fast Paul will speak.")).strip()
-            self.answers["ttsSpeed"] = tts_speed if isinstance(tts_speed, int) else "110"
+            tts_speed = int(tts_speed) if tts_speed.isdigit() else 110
+            self.answers["ttsSpeed"] = str(tts_speed)
 
             end_pause = (yield Step("Enter End Pause in milliseconds (default 1300): \n\n", "1300", "This is the pause duration in milliseconds after Paul ends each sentence.")).strip()
-            self.answers["endPause"] = end_pause if isinstance(end_pause, int) else "1300"
+            end_pause = int(end_pause) if end_pause.isdigit() else 1300
+            self.answers["endPause"] = str(end_pause)
 
             log_level = (yield Step("Enter Log Level (DEBUG, INFO, WARNING, ERROR) (default INFO): \n\n", "INFO", "How much logging do you want?")).strip()
             self.answers["logLevel"] = (log_level or "INFO").upper()
 
             http_timeout = (yield Step("Enter Global HTTP Timeout in seconds (default 15): \n\n", "15", "How long should each page try and load before giving up?")).strip()
-            self.answers["globalHTTPTimeout"] = http_timeout if isinstance(http_timeout, int) else "15"
+            http_timeout = int(http_timeout) if http_timeout.isdigit() else 15
+            self.answers["globalHTTPTimeout"] = str(http_timeout)
 
             current_time_script = (yield Step("Enter Current Time Script (default 'The current time is.'): \n\n", "The current time is.", "ex. Entering \"The current time is.\" would mean that sentence and then the time would be read out, you can add the station ID tagline here if you wish.")).strip()
             self.answers["currentTimeScript"] = current_time_script or "The current time is."
@@ -580,7 +583,8 @@ def interactive_config_setup(log):
             self.answers["dividers"] = dividers
 
             forecast_days = (yield Step("Enter Forecast Days (default 14): \n\n", "14", "The number of days to include in the forecast. Typically, this is 14 days (2 weeks).\n\n")).strip()
-            self.answers["forecastDays"] = forecast_days or "14"
+            forecast_days = int(forecast_days) if forecast_days.isdigit() else 14
+            self.answers["forecastDays"] = str(forecast_days)
 
             last_link = "https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd"
             forecast_zone = (yield Step("Enter Forecast Zone (default MIZ072): \n\n", "MIZ072", "You can find this by visiting: https://www.arcgis.com/apps/mapviewer/index.html?url=https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer&source=sd and enabling the \"Public Weather Zone Forecasts\" layer. Click the link, wait for ArcGIS to load, then click the arrow next to \"Nws reference map\", then \"Weather Zone Forecasts\", then finally click the eye icon next to \"Public Weather Zone Forecasts\". Zoom in to your county and the zone will be a string like \"MI072\" on the map itself. Just add a letter Z (for Zone) between the state abbreviation and the zone ID.")).strip()

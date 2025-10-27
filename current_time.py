@@ -20,7 +20,9 @@ if date:
     dateStatus = 'ENABLED'
 else:
     dateStatus = 'DISABLED'
-timeZone = timezone.replace('EDT', 'Eastern Daylight Time.').replace('EST', 'Eastern Standard Time.').replace('CDT', 'Central Daylight Time').replace('CST', 'Central Standard Time')
+
+timeZone = timezone.replace('EDT', 'Eastern Daylight Time.').replace('EST', 'Eastern Standard Time.').replace('CDT', 'Central Daylight Time').replace('CST', 'Central Standard Time').replace('MDT', 'Mountain Daylight Time').replace('MST', 'Mountain Standard Time').replace('PDT', 'Pacific Daylight Time').replace('PST', 'Pacific Standard Time')
+
 log.debug('[TIME] Running AutoTime - V2.0.0A\n[TIME] Format: %s\n[TIME] Speed: %s\n[TIME] Timezone: %s\n[TIME] Date is %s', script, speed, timeZone, dateStatus)
 
 def getCurrentTime():
@@ -36,14 +38,18 @@ def getCurrentTime():
             else:
                 hour = str(hour).replace('0', '')
             timeFormat = now.strftime(f'{hour}. <vtml_pause time="0"/> %M. <vtml_pause time="0"/> %p. <vtml_pause time="0"/> {timeZone}')
-            log.debug('[TIME] %s', timeFormat)
         else:
             log.warning('[TIME WARN] That probably wasn\'t supposed to happen.')
+        if now.strftime('%M')[0:1] == "0":
+            minute = now.strftime('%M')
+            if str(minute) == '00':
+                hour_no_leading_0 = now.strftime('%I').lstrip('0')
+                timeFormat = now.strftime(f'{hour_no_leading_0}. <vtml_pause time="0"/> %p. <vtml_pause time="0"/> {timeZone}')
         if dateSelect == 'True':
-            log.debug('[TIME] Date is active.')
+            log.debug('[DATE] Date is active.')
             dateFormat = now.strftime('<vtml_pause time="0"/> %B %d, %Y. ')
             dateFormat = dateScript + dateFormat
-            log.debug('[TIME] %s', dateFormat)
+            log.debug('[DATE] %s', dateFormat)
         else:
             dateFormat = ''
         timeFormat = '<vtml_pause time="500"/> <vtml_speed value="' + speed + '"> ' + dateFormat + script + timeFormat + '<vtml_pause time="1300"/> </vtml_speed>'

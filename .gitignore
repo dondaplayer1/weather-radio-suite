@@ -7,3 +7,4 @@ include/
 !requirements.txt
 __pycache__/
 bmh_wav/
+config.json
