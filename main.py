@@ -19,8 +19,11 @@ import time
 import shutil
 import logging
 import argparse
+import tempfile
 import traceback
 import subprocess
+from products import PRODUCT_GENERATORS
+from current_time import getCurrentTime
 
 class ColorFormatter(logging.Formatter):
     grey = "\x1b[90m"
@@ -71,14 +74,6 @@ try:
     args = parser.parse_args()
 
     config = json.load(open('config.json', encoding='utf-8'))
-
-    # Various products
-    from forecast import getForecast
-    from alert_summary import getAlertSummary
-    from hazardous_weather_outlook import getHazardousWeatherOutlook
-    from tropical_weather_outlook import getTropicalWeatherOutlook
-    from current_time import getCurrentTime
-    from area_observations import getObservations
 except FileNotFoundError:
     log = setup_logging(args.verbose, None)
     if args.generate_config:
@@ -108,36 +103,40 @@ except Exception as e:
 
 path_separator = '\\' if os.name == 'nt' else '/'
 
-PRODUCT_GENERATORS = (
-    getForecast,
-    getAlertSummary,
-    getHazardousWeatherOutlook,
-    getTropicalWeatherOutlook,
-    getCurrentTime,
-    getObservations,
-)
+try:
+    PRODUCT_GENERATORS = [PRODUCT_GENERATORS[i - 1] for i in config.get('productOrder', range(1, len(PRODUCT_GENERATORS) + 1))]
+except Exception:
+    log = setup_logging(args.verbose, config["logLevel"] if "logLevel" in config else None)
+    log.critical("[BMH] Error processing product order from config, maybe you generated an invalid config.json file or forgot key productOrder?: %s", traceback.format_exc())
+    sys.exit(1)
 
 def refresh_products():
     for generator in PRODUCT_GENERATORS:
         generator()
 
-def combine_audio(output_name, AUDIO_SEQUENCE):
-    sox_location = shutil.which(f'binary{path_separator}sox.exe') if os.name == 'nt' else shutil.which('sox')
-    sox = subprocess.Popen((sox_location, '-q', *AUDIO_SEQUENCE, output_name))
-    sox.wait()
+def combine_audio(AUDIO_SEQUENCE):
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_file_name = temp_file.name
+        sox_location = shutil.which(f'binary{path_separator}sox.exe') if os.name == 'nt' else shutil.which('sox')
+        sox = subprocess.Popen((sox_location, '-q', *AUDIO_SEQUENCE, temp_file_name + '.wav'))
+        sox.wait()
+    shutil.move(temp_file_name, os.path.join(os.getcwd(), 'FINAL_CYCLE.wav'))
+    temp_file.delete = True
 
 def run_time_updates(minutes, AUDIO_SEQUENCE):
     for remaining in range(minutes, 0, -1):
         plural = 's' if remaining != 1 else ''
         log.info('[BMH] Time update completed. Continuing time updates for the next %d minute%s...', remaining, plural)
         getCurrentTime()
-        combine_audio('FINAL_CYCLE.wav', AUDIO_SEQUENCE)
+        if config['produceSingleFile']:
+            log.info('[BMH] Combining all audio files into FINAL_CYCLE.wav. Order: %s', ', '.join(AUDIO_SEQUENCE).replace(f'bmh_wav{path_separator}', '').replace('.wav', ''))
+            combine_audio(AUDIO_SEQUENCE)
         time.sleep(60)
 
 def main(log):
     try:
         log.info('[BMH] Setting up BMH Emulation environment...')
-        os.makedirs(f'..{path_separator}bmh_wav', exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(), f'bmh_wav'), exist_ok=True)
         os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bmh_wav"))
         for file in os.listdir():
             if file.endswith('.wav'):
@@ -149,45 +148,84 @@ def main(log):
         while True:
             refresh_products()
             no_alerts_file = os.path.join(os.getcwd(), 'NoAlerts.txt')
-
+            # No alerts case
             if os.path.exists(no_alerts_file):
+                # No tropical forecast
                 if config['Forecast']['enableTropicalForecast'] is False:
-                    AUDIO_SEQUENCE = (
-                        f'bmh_wav{path_separator}Forecast.wav',
-                        f'bmh_wav{path_separator}Observations.wav',
-                        f'bmh_wav{path_separator}HWO.wav',
-                        f'bmh_wav{path_separator}CurrentTime.wav',
-                    )
+                    product_order = config.get('productOrder', [1, 2, 3, 4, 5, 6])
+                    AUDIO_SEQUENCE = []
+                    for product in product_order:
+                        if product == 1:
+                            continue  # Skip Alert Summary
+                        elif product == 2:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Forecast.wav')
+                        elif product == 3:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Observations.wav')
+                        elif product == 4:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}HWO.wav')
+                        elif product == 5:
+                            continue  # Skip TWO
+                        elif product == 6:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}CurrentTime.wav')
+                    AUDIO_SEQUENCE = tuple(AUDIO_SEQUENCE)
+                # Tropical forecast enabled
                 else:
-                    AUDIO_SEQUENCE = (
-                        f'bmh_wav{path_separator}Forecast.wav',
-                        f'bmh_wav{path_separator}Observations.wav',
-                        f'bmh_wav{path_separator}HWO.wav',
-                        f'bmh_wav{path_separator}TWO.wav',
-                        f'bmh_wav{path_separator}CurrentTime.wav',
-                    )
-
+                    product_order = config.get('productOrder', [1, 2, 3, 4, 5, 6])
+                    AUDIO_SEQUENCE = []
+                    for product in product_order:
+                        if product == 1:
+                            continue  # Skip Alert Summary
+                        elif product == 2:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Forecast.wav')
+                        elif product == 3:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Observations.wav')
+                        elif product == 4:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}HWO.wav')
+                        elif product == 5:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}TWO.wav')
+                        elif product == 6:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}CurrentTime.wav')
+                    AUDIO_SEQUENCE = tuple(AUDIO_SEQUENCE)
+            # Alerts present case
             else:
+                # No tropical forecast
                 if config['Forecast']['enableTropicalForecast'] is False:
-                    AUDIO_SEQUENCE = (
-                        f'bmh_wav{path_separator}AlertSummary.wav',
-                        f'bmh_wav{path_separator}Forecast.wav',
-                        f'bmh_wav{path_separator}Observations.wav',
-                        f'bmh_wav{path_separator}HWO.wav',
-                        f'bmh_wav{path_separator}CurrentTime.wav',
-                    )
+                    product_order = config.get('productOrder', [1, 2, 3, 4, 5, 6])
+                    AUDIO_SEQUENCE = []
+                    for product in product_order:
+                        if product == 1:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}AlertSummary.wav')
+                        elif product == 2:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Forecast.wav')
+                        elif product == 3:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Observations.wav')
+                        elif product == 4:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}HWO.wav')
+                        elif product == 5:
+                            continue  # Skip TWO
+                        elif product == 6:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}CurrentTime.wav')
+                # Tropical forecast enabled
                 else:
-                    AUDIO_SEQUENCE = (
-                        f'bmh_wav{path_separator}AlertSummary.wav',
-                        f'bmh_wav{path_separator}Forecast.wav',
-                        f'bmh_wav{path_separator}Observations.wav',
-                        f'bmh_wav{path_separator}HWO.wav',
-                        f'bmh_wav{path_separator}TWO.wav',
-                        f'bmh_wav{path_separator}CurrentTime.wav',
-                    )
-
-            log.info('[BMH] Combining all audio files into FINAL_CYCLE.wav...')
-            combine_audio('FINAL_CYCLE.wav', AUDIO_SEQUENCE)
+                    product_order = config.get('productOrder', [1, 2, 3, 4, 5, 6])
+                    AUDIO_SEQUENCE = []
+                    for product in product_order:
+                        if product == 1:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}AlertSummary.wav')
+                        elif product == 2:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Forecast.wav')
+                        elif product == 3:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}Observations.wav')
+                        elif product == 4:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}HWO.wav')
+                        elif product == 5:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}TWO.wav')
+                        elif product == 6:
+                            AUDIO_SEQUENCE.append(f'bmh_wav{path_separator}CurrentTime.wav')
+                    AUDIO_SEQUENCE = tuple(AUDIO_SEQUENCE)
+            if config['produceSingleFile']:
+                log.info('[BMH] Combining all audio files into FINAL_CYCLE.wav. Order: %s', ', '.join(AUDIO_SEQUENCE).replace(f'bmh_wav{path_separator}', '').replace('.wav', ''))
+                combine_audio(AUDIO_SEQUENCE)
             log.info('[BMH] All tasks completed successfully. Re-running in approx. 1 minute (time-only)...')
             time.sleep(60)
             run_time_updates(9, AUDIO_SEQUENCE)

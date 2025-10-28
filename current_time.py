@@ -32,14 +32,16 @@ def getCurrentTime():
         now = datetime.now()
         timeFormat = now.strftime(f'%I. <vtml_pause time="0"/> %M. <vtml_pause time="0"/> %p. <vtml_pause time="0"/> {timeZone}')
         if now.strftime('%I')[0:1] == "0":
-            hour = now.strftime('%I')
-            if str(hour) == '00':
-                hour = '12'
-            else:
-                hour = str(hour).replace('0', '')
-            timeFormat = now.strftime(f'{hour}. <vtml_pause time="0"/> %M. <vtml_pause time="0"/> %p. <vtml_pause time="0"/> {timeZone}')
-        else:
-            log.warning('[TIME WARN] That probably wasn\'t supposed to happen.')
+            try:
+                hour = now.strftime('%I')
+                if str(hour) == '00':
+                    hour = '12'
+                else:
+                    hour = str(hour).replace('0', '')
+                timeFormat = now.strftime(f'{hour}. <vtml_pause time="0"/> %M. <vtml_pause time="0"/> %p. <vtml_pause time="0"/> {timeZone}')
+            except Exception:
+                log.warning('[TIME WARN] That probably wasn\'t supposed to happen.')
+                log.error('[TIME WARN] %s', traceback.format_exc())
         if now.strftime('%M')[0:1] == "0":
             minute = now.strftime('%M')
             if str(minute) == '00':

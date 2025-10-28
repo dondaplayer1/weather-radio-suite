@@ -51,9 +51,9 @@ def getMain(airportCode):
         PressureDirection = getPressureDirection(airportCode)
         time = now.strftime('%I %p').lstrip('0')
         if windGust == 'null':
-            fullObservation = f'At {time} in {cityName}, it was {skyCondition}. The temperature was {tempInF}, the dewpoint {dewpointInF}, and the relative humidity was {relativeHumidity} percent. The wind was {windDirection} at {windSpeed} miles an hour. The pressure was {Pressure} inches and {PressureDirection}.'
+            fullObservation = f'{cityName}, it was {skyCondition}. The temperature was {tempInF}, the dewpoint {dewpointInF}, and the relative humidity was {relativeHumidity} percent. The wind was {windDirection} at {windSpeed} miles an hour. The pressure was {Pressure} inches and {PressureDirection}.'
         else:
-            fullObservation = f'At {time} in {cityName}, it was {skyCondition}. The temperature was {tempInF}, the dewpoint {dewpointInF}, and the relative humidity was {relativeHumidity} percent. The wind was {windDirection} at {windSpeed} miles an hour, gusting to {windGust}. The pressure was {Pressure} inches and {PressureDirection}.'
+            fullObservation = f'{cityName}, it was {skyCondition}. The temperature was {tempInF}, the dewpoint {dewpointInF}, and the relative humidity was {relativeHumidity} percent. The wind was {windDirection} at {windSpeed} miles an hour, gusting to {windGust}. The pressure was {Pressure} inches and {PressureDirection}.'
         recap = f'Once again, at {time} in {cityName} it was {tempInF} degrees under {skyCondition} skies.'
     except Exception:
         log.error('[OBSERVATIONS] No report for %s. %s', airportCode, traceback.format_exc())
@@ -81,12 +81,10 @@ def getRegional(airportCode):
             else:
                 fullObservation = f'{dividers[airportCode]} {cityName}, it was {skyCondition}, with a temperature of {tempInF}. The <vtml_phoneme alphabet="x-CMU" ph="W IH1 N D"></vtml_phoneme> was {windDirection} at {windSpeed} miles an hour, gusting to {windGust} miles an hour.'
         else:
-            randomDivider = random.choice(['In ', 'At '])
-            log.debug('[OBSERVATIONS] Using random divider for %s: %s', airportCode, randomDivider)
             if windGust == 'null':
-                fullObservation = f'{randomDivider}{cityName}, it was {skyCondition}, with a temperature of {tempInF}. The <vtml_phoneme alphabet="x-CMU" ph="W IH1 N D"></vtml_phoneme> was {windDirection} at {windSpeed} miles an hour.'
+                fullObservation = f'{cityName}, it was {skyCondition}, with a temperature of {tempInF}. The <vtml_phoneme alphabet="x-CMU" ph="W IH1 N D"></vtml_phoneme> was {windDirection} at {windSpeed} miles an hour.'
             else:
-                fullObservation = f'{randomDivider}{cityName}, it was {skyCondition}, with a temperature of {tempInF}. The <vtml_phoneme alphabet="x-CMU" ph="W IH1 N D"></vtml_phoneme> was {windDirection} at {windSpeed} miles an hour, gusting to {windGust} miles an hour.'
+                fullObservation = f'{cityName}, it was {skyCondition}, with a temperature of {tempInF}. The <vtml_phoneme alphabet="x-CMU" ph="W IH1 N D"></vtml_phoneme> was {windDirection} at {windSpeed} miles an hour, gusting to {windGust} miles an hour.'
     except Exception:
         log.error('[OBSERVATIONS] No report for %s.', airportCode)
         if airportCode in dividers:
@@ -136,29 +134,29 @@ def getObservations():
         for location in regionalObsCodes:
             getRegional(location)
         observations.append(recap)
-        observations = '\n'.join(observations)
+        observationsStr = '\n'.join(observations)
         if len(openerlist) > 0:
             openerChoice = str(random.choice(openerlist))
             log.debug('[OBSERVATIONS OPENER] Picked "%s" for Observation Opener.', openers[openerChoice])
             opener = openers[openerChoice].replace('TIME', currentTimeFormat)
-            observations = f'{opener} {observations}'
+            observationsStr = f'{opener} {observationsStr}'
         for phoneme in phonemeDict:
             log.debug('[OBSERVATIONS PHONEMES] Replacing %s with %s', phoneme, phonemeDict[phoneme])
-            observations = str(observations).replace(phoneme, f'<vtml_phoneme alphabet="x-cmu" ph="{phonemeDict[phoneme]}"></vtml_phoneme>')
+            observationsStr = str(observationsStr).replace(phoneme, f'<vtml_phoneme alphabet="x-cmu" ph="{phonemeDict[phoneme]}"></vtml_phoneme>')
         for word in replaceDict:
             log.debug('[OBSERVATIONS PHONEMES] Replacing %s with %s', word, replaceDict[word])
             if '*PAUSE' in replaceDict[word]:
                 pauseTime = replaceDict[word].split('*')[1].split('-')[1]
                 word = word.replace(f'*PAUSE-{pauseTime}*', f'<vtml_pause time="{pauseTime}"/>')
-                observations = str(observations).replace(word, replaceDict[word])
+                observationsStr = str(observationsStr).replace(word, replaceDict[word])
             else:
-                observations = str(observations).replace(word, replaceDict[word])
-        observations = f'<vtml_pause time="500"/> <vtml_speed value="{speed}"> ' + observations + f'<vtml_pause time="{pause}"/> </vtml_speed>'
+                observationsStr = str(observationsStr).replace(word, replaceDict[word])
+        observationsStr = f'<vtml_pause time="500"/> <vtml_speed value="{speed}"> ' + observationsStr + f'<vtml_pause time="{pause}"/> </vtml_speed>'
 
-        observations = observations.replace('\n', ' ').replace('\r', ' ')
+        observationsStr = observationsStr.replace('\n', ' ').replace('\r', ' ')
 
-        log.debug('[OBSERVATIONS] Final Text: %s', observations)
-        produce_wav_file(observations, 'Observations.wav')
+        log.debug('[OBSERVATIONS] Final Text: %s', observationsStr)
+        produce_wav_file(observationsStr, 'Observations.wav')
     except requests.exceptions.Timeout:
         log.error("[OBSERVATIONS] An HTTP Request timed out.")
     except Exception:

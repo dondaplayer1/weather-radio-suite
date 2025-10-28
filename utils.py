@@ -1,5 +1,6 @@
 
 import os
+import sys
 import datetime
 import traceback
 import subprocess
@@ -59,6 +60,8 @@ def generate_default_config(log):
         "ttsSpeed": "110",
         "endPause": "1300",
         "logLevel": "INFO",
+        "productOrder": [1, 2, 3, 4, 5, 6],
+        "produceSingleFile": True,
         "globalHTTPTimeout": "15",
         "currentTime": {
             "timeScript": "The current time is.",
@@ -69,7 +72,7 @@ def generate_default_config(log):
         "Observations": {
             "mainObsCode": "KAZO",
             "regionalObsCodes": ["KBTL", "KHAI", "KLWA", "KGRR", "KLAN", "KDET", "KFNT", "KLDM", "KY31", "KTVC", "KAPN", "KANJ", "KSAW", "KMKE", "KLOT", "KFWA"],
-            "openerList": [1, 2 , 3, 4],
+            "openerList": [1, 2, 3, 4],
             "openers": {
                 "1": "Got weather? The michigan mezonet does and here are your TIME observations. ",
                 "2": "From the mountains in the north to the rolling farm lands in the south, here are your TIME michigan weather observations. ",
@@ -442,6 +445,8 @@ def interactive_config_setup(log):
 
         def _steps(self) -> Generator[Step, str, None]:
             global last_link
+            from products import PRODUCT_GENERATORS
+            PRODUCT_COUNT = len(PRODUCT_GENERATORS)
 
             tts_speed = (yield Step("Enter TTS Speed (default 110): \n\n", "110", "This is how fast Paul will speak.")).strip()
             tts_speed = int(tts_speed) if tts_speed.isdigit() else 110
@@ -453,6 +458,18 @@ def interactive_config_setup(log):
 
             log_level = (yield Step("Enter Log Level (DEBUG, INFO, WARNING, ERROR) (default INFO): \n\n", "INFO", "How much logging do you want?")).strip()
             self.answers["logLevel"] = (log_level or "INFO").upper()
+
+            product_order_input = (yield Step(f"Enter Product Generation Order as comma-separated numbers (default {str(list(range(1, PRODUCT_COUNT + 1))).replace('[', '').replace(']', '').strip()}): \n\n", str(list(range(1, PRODUCT_COUNT + 1))).replace('[', '').replace(']', '').strip(), "The order in which products are generated. 1: Alert Summary, 2: Forecast, 3: Observations, 4: Hazardous Weather Outlook, 5: Tropical Weather Outlook, 6: Current Time")).strip()
+            if product_order_input:
+                product_order = [int(i.strip()) for i in product_order_input.split(",") if i.strip().isdigit() and 1 <= int(i.strip()) <= PRODUCT_COUNT]
+                if len(product_order) != PRODUCT_COUNT or product_order == []:
+                    product_order = list(range(1, PRODUCT_COUNT + 1))
+            else:
+                product_order = list(range(1, PRODUCT_COUNT + 1))
+            self.answers["productOrder"] = product_order
+
+            produce_single_file = (yield Step("[bool] Produce Single WAV File? (yes/no) (default yes): \n\n", "yes", "If yes, all products will be combined into a single WAV file for convenience. Otherwise, only individual files will be produced.")).strip().lower() in ("yes", "y")
+            self.answers["produceSingleFile"] = produce_single_file
 
             http_timeout = (yield Step("Enter Global HTTP Timeout in seconds (default 15): \n\n", "15", "How long should each page try and load before giving up?")).strip()
             http_timeout = int(http_timeout) if http_timeout.isdigit() else 15
@@ -682,6 +699,8 @@ def interactive_config_setup(log):
     ttsSpeed = answers["ttsSpeed"]
     endPause = answers["endPause"]
     logLevel = answers["logLevel"]
+    productOrder = answers["productOrder"]
+    produceSingleFile = answers["produceSingleFile"]
     globalHTTPTimeout = answers["globalHTTPTimeout"]
     currentTimeScript = answers["currentTimeScript"]
     dateEnable = answers["dateEnable"]
@@ -714,6 +733,8 @@ def interactive_config_setup(log):
         "ttsSpeed": ttsSpeed,
         "endPause": endPause,
         "logLevel": logLevel,
+        "productOrder": productOrder,
+        "produceSingleFile": produceSingleFile,
         "globalHTTPTimeout": globalHTTPTimeout,
         "currentTime": {
             "timeScript": currentTimeScript,

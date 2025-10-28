@@ -2,6 +2,8 @@
     "ttsSpeed": "110",
     "endPause": "1300",
     "logLevel": "INFO",
+    "productOrder": [1, 2, 3, 4, 5, 6],
+    "produceSingleFile": true,
     "globalHTTPTimeout": "15",
     "currentTime": {
         "timeScript": "The current time is.",
