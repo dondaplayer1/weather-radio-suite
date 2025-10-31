@@ -1,0 +1,68 @@
+{
+    "ttsSpeed": "110",
+    "endPause": "1300",
+    "logLevel": "INFO",
+    "productOrder": [1, 2, 3, 4, 5, 6],
+    "produceSingleFile": true,
+    "globalHTTPTimeout": "15",
+    "currentTime": {
+        "timeScript": "The current time is.",
+        "timeZone": "EDT",
+        "dateEnable": false,
+        "dateScript": "Today's date is. "
+    },
+    "Observations": {
+        "mainObsCode": "KAZO",
+        "regionalObsCodes": ["KBTL", "KHAI", "KLWA", "KGRR", "KLAN", "KDET", "KFNT", "KLDM", "KY31", "KTVC", "KAPN", "KANJ", "KSAW", "KMKE", "KLOT", "KFWA"],
+        "openerList": [1, 2 , 3, 4],
+        "openers": {
+            "1": "Got weather? The michigan mezonet does and here are your TIME observations. ",
+            "2": "From the mountains in the north to the rolling farm lands in the south, here are your TIME michigan weather observations. ",
+            "3": "In a hurry? Don't worry, because here are your TIME weather observations.",
+            "4": "At the top of the hour, "
+        },
+        "cityNameDef": {
+            "KAZO": "Kalamazoo",
+            "KBTL": "Battle Creek",
+            "KHAI": "Three Rivers",
+            "KLWA": "South Haven",
+            "KGRR": "The National Weather Service forecast office in Grand Rapids",
+            "KLAN": "Lansing",
+            "KDET": "Detroit",
+            "KFNT": "Flint",
+            "KLDM": "Ludington",
+            "KY31": "West Branch",
+            "KTVC": "Traverse City",
+            "KAPN": "Alpena",
+            "KANJ": "Sault Ste. Marie",
+            "KSAW": "Marquette",
+            "KMKE": "Milwaukee",
+            "KLOT": "Chicago",
+            "KFWA": "Fort Wayne"
+        },
+        "dividers": {
+            "KBTL": "Around our local area, ",
+            "KGRR": "At ",
+            "KLAN": "Around the rest of the state, to our east, ",
+            "KLDM": "Looking north, ",
+            "KANJ": "In the upper peninsula, ",
+            "KSAW": "And, ",
+            "KMKE": "In neighboring states, "
+        }
+    },
+    "Forecast": {
+        "forecastDays": "14",
+        "forecastZone": "MIZ072",
+        "forecastPre": "Here is your official national weather service forecast for the Kalamazoo listening area.",
+        "forecastPost": "For additional weather and climate information, please visit weather, dot g o v, forward slash, g, r, r.",
+        "enableTropicalForecast": false
+    },
+    "HWO": {
+        "office": "GRR"
+    },
+    "AlertSummary": {
+        "stationID": "WNG773",
+        "alertZones": ["MIC077"],
+        "timezoneLong": "Eastern Daylight Time"
+    }
+}

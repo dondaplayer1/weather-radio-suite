@@ -1,4 +1,10 @@
-/binary/
-/data-common/
-/data-paul/
-/include/
+binary/
+data-common/
+data-paul/
+include/
+*.wav
+*.txt
+!requirements.txt
+__pycache__/
+bmh_wav/
+config.json
