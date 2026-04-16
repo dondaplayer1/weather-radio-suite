@@ -10,6 +10,8 @@ log = logging.getLogger("BMH")
 
 config = json.load(open('config.json', encoding='utf-8'))
 office = config['HWO']['office']
+preambleStatus = config['HWO']['preambleEnable']
+preamble = config['HWO']['preamble']
 speed = config['ttsSpeed']
 pause = config['endPause']
 phonemeDict = json.load(open('phonemeDB.json', encoding='utf-8'))
@@ -30,8 +32,15 @@ def getHazardousWeatherOutlook():
         hwo = hwo['productText']
         hwo = hwo.split('\n')
         index = [idx for idx, s in enumerate(hwo) if 'this hazardous weather outlook is for' in s.lower()][0]
-        hwo = hwo[int(index):-2]
-        hwo = '\n'.join(hwo)
+        if preambleStatus: #if preamble is enabled, don't include the default NWS HWO header!
+            log.debug('[HWO] Preamble enabled!')
+            hwo = hwo[int(index) + 1:-2]
+            while hwo and not hwo[0].strip():
+                hwo.pop(0)
+            hwo = '\n'.join(hwo)
+        else: #if preamble disabled, pull default NWS HWO header
+            hwo = hwo[int(index):-2]
+            hwo = '\n'.join(hwo)
         for phoneme in phonemeDict:
             log.debug('[HWO PHONEMES] Replacing %s with %s', phoneme, phonemeDict[phoneme])
             hwo = str(hwo).replace(phoneme, f'<vtml_phoneme alphabet="x-cmu" ph="{phonemeDict[phoneme]}"></vtml_phoneme>')
@@ -46,7 +55,10 @@ def getHazardousWeatherOutlook():
 
         hwo = re.sub(r'\$\$.*\b(20\d{2})\b', '', hwo, flags=re.DOTALL)
         hwo = hwo.replace('\n', ' ').replace('\r', ' ')
-
+        
+        if preambleStatus:
+            log.debug('[HWO] Adding HWO preamble.')
+            hwo = f'{preamble} {hwo}'
         log.debug('[HWO] Final Text: %s', hwo)
         produce_wav_file(hwo, 'HWO.wav')
     except requests.exceptions.Timeout:
