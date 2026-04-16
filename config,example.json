@@ -58,7 +58,9 @@
         "enableTropicalForecast": false
     },
     "HWO": {
-        "office": "GRR"
+        "office": "GRR",
+        "preambleEnable": false,
+        "preamble": "Here is the hazardous weather outlook."
     },
     "AlertSummary": {
         "stationID": "WNG773",
